@@ -608,21 +608,24 @@ const TRAMO_NOMBRES = ['0-12.450€', '12.450-20.200€', '20.200-35.200€', '3
 
 function calcularRecompensa(resultado, objetivo) {
     const rec = resultado.recaudacion_total;
-    const diffRec = resultado.diff_recaudacion;
     const tipoEf = resultado.tipo_efectivo_medio;
     const prog = resultado.progresividad;
+    const kakwani = resultado.kakwani || 0;
+    // Referencia: recaudación actual ~218.000 M€
+    const recNorm = rec / 218000;  // 1.0 = igual al actual
 
     switch (objetivo) {
         case 'max_recaudacion':
-            return rec / 1e9;  // Normalizar a miles de millones
+            return recNorm * 10;
         case 'min_carga_media':
-            return -tipoEf + (rec > 60000 ? 0 : -100);  // Penalizar recaudación muy baja
+            return -tipoEf * 0.5 + (recNorm > 0.5 ? recNorm * 2 : -20);
         case 'equilibrio':
-            return (rec / 1e9) * 0.4 + prog * 0.3 - Math.abs(tipoEf - 20) * 0.1;
+            return recNorm * 4 + prog * 0.5 + kakwani * 0.05 - Math.abs(tipoEf - 20) * 0.1;
         case 'max_progresividad':
-            return prog * 2 + (rec > 70000 ? 0 : -50);  // Penalizar si baja mucho
+            // Maximizar la diferencia entre tipos efectivos alto/bajo + penalizar caída de recaudación
+            return kakwani * 0.3 + prog * 1.5 + (recNorm > 0.7 ? recNorm * 2 : -10);
         default:
-            return rec / 1e9;
+            return recNorm * 10;
     }
 }
 

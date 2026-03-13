@@ -165,9 +165,17 @@ def api_simular_batch():
         total_base = sum(g["declarantes"] * g["renta_media"] for g in en["detalle_irpf"])
         tipo_ef_medio = (total_cuota / total_base * 100) if total_base > 0 else 0
 
-        # Índice de progresividad (ratio entre tipo ef. último/primer tramo)
+        # Índice de progresividad: ratio tipo ef. tramo más alto / primer tramo con tipo > 0
         tipos_ef = [g.get("tipo_efectivo", 0) for g in en["detalle_irpf"]]
-        progresividad = (tipos_ef[-1] / tipos_ef[0]) if tipos_ef[0] > 0 else 0
+        tipos_ef_pos = [t for t in tipos_ef if t > 0]
+        if len(tipos_ef_pos) >= 2:
+            progresividad = tipos_ef_pos[-1] / tipos_ef_pos[0]
+        elif len(tipos_ef_pos) == 1:
+            progresividad = 1.0
+        else:
+            progresividad = 0.0
+        # Índice Kakwani simplificado: diferencia entre tipo marginal más alto y más bajo
+        kakwani = (max(tipos_ef) - min(t for t in tipos_ef)) if tipos_ef else 0
 
         resultados.append({
             "recaudacion_irpf": en["recaudacion_irpf"],
@@ -176,6 +184,7 @@ def api_simular_batch():
             "diff_recaudacion": resultado["diferencia_recaudacion_total"],
             "tipo_efectivo_medio": round(tipo_ef_medio, 2),
             "progresividad": round(progresividad, 2),
+            "kakwani": round(kakwani, 2),
             "tipos": tipos,
         })
 
