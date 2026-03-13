@@ -1,0 +1,318 @@
+/* ==========================================================
+   Simulador Fiscal IRPF/IS — Estilo academico
+   Universidad Pablo de Olavide / Investigacion fiscal
+   ========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --navy: #1b2a4a;
+    --navy-light: #2c3e6b;
+    --burgundy: #8b1a2b;
+    --burgundy-light: #a63446;
+    --gold: #c7a63b;
+    --gold-muted: #d4b95e;
+    --sage: #2d6a4f;
+    --paper: #faf8f5;
+    --paper-alt: #f3f0eb;
+    --ink: #2c2c2c;
+    --ink-light: #555;
+    --border: #d5cfc5;
+    --border-light: #e8e3db;
+}
+
+body {
+    background: var(--paper);
+    font-family: 'Source Sans 3', 'Georgia', serif;
+    font-size: 0.92rem;
+    color: var(--ink);
+    line-height: 1.55;
+}
+
+/* Navbar */
+.bg-dark-custom {
+    background: var(--navy) !important;
+    border-bottom: 3px solid var(--gold);
+}
+
+.navbar-brand {
+    font-family: 'Crimson Text', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: 0.3px;
+}
+
+/* Metric cards */
+.card-metric {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: none;
+    background: white;
+    border-top: 3px solid var(--navy);
+    transition: border-color 0.2s;
+}
+.card-metric:hover {
+    border-top-color: var(--burgundy);
+}
+.metric-label {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-light);
+    font-weight: 600;
+}
+.metric-value {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--navy);
+}
+.metric-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #888;
+}
+.metric-sub.positive {
+    color: var(--sage);
+    font-weight: 600;
+}
+.metric-sub.negative {
+    color: var(--burgundy);
+    font-weight: 600;
+}
+
+/* Control panel */
+.tramo-row {
+    padding: 0.5rem 0.75rem;
+    border-radius: 2px;
+    background: var(--paper-alt);
+    border-left: 3px solid var(--navy);
+    margin-bottom: 0.4rem;
+}
+.tramo-label {
+    font-family: 'Source Sans 3', sans-serif;
+    color: var(--ink-light);
+    font-weight: 500;
+    font-size: 0.82rem;
+}
+
+.form-range::-webkit-slider-thumb {
+    background: var(--navy);
+}
+.form-range::-webkit-slider-runnable-track {
+    background: var(--border);
+}
+
+/* Cards */
+.card {
+    border-radius: 4px;
+    box-shadow: none;
+    border: 1px solid var(--border);
+    background: white;
+}
+.card-header {
+    border-radius: 4px 4px 0 0 !important;
+    font-family: 'Crimson Text', Georgia, serif;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.3px;
+}
+.card-header.bg-dark-custom {
+    border-bottom: 2px solid var(--gold);
+}
+
+/* Section headers inside cards */
+.card-body h6 {
+    font-family: 'Crimson Text', Georgia, serif;
+    font-weight: 700;
+    color: var(--navy);
+    font-size: 0.95rem;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Tabs — academic style */
+.nav-tabs {
+    border-bottom: 2px solid var(--navy);
+}
+.nav-tabs .nav-link {
+    font-family: 'Source Sans 3', sans-serif;
+    color: var(--ink-light);
+    font-weight: 500;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.6rem 1rem;
+}
+.nav-tabs .nav-link:hover {
+    color: var(--navy);
+    border-bottom-color: var(--border);
+}
+.nav-tabs .nav-link.active {
+    color: var(--navy);
+    font-weight: 700;
+    border-bottom: 2px solid var(--burgundy);
+    background: transparent;
+}
+
+/* Tables — academic/paper style */
+.table {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.82rem;
+}
+.table thead.table-dark {
+    background: var(--navy) !important;
+}
+.table thead.table-dark th {
+    background: var(--navy) !important;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--gold);
+}
+.table td {
+    border-color: var(--border-light);
+    padding: 0.45rem 0.6rem;
+}
+.table tbody tr:hover {
+    background: var(--paper-alt);
+}
+.diff-positive {
+    color: var(--burgundy);
+    font-weight: 600;
+}
+.diff-negative {
+    color: var(--sage);
+    font-weight: 600;
+}
+.diff-zero {
+    color: #999;
+}
+
+/* Buttons — restrained academic palette */
+.btn-primary {
+    background: var(--navy);
+    border-color: var(--navy);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.btn-primary:hover {
+    background: var(--navy-light);
+    border-color: var(--navy-light);
+}
+.btn-outline-secondary {
+    color: var(--ink-light);
+    border-color: var(--border);
+    font-size: 0.82rem;
+}
+.btn-outline-secondary:hover {
+    background: var(--paper-alt);
+    color: var(--navy);
+    border-color: var(--navy);
+}
+.btn-outline-info {
+    color: var(--navy);
+    border-color: var(--navy-light);
+    font-size: 0.82rem;
+}
+.btn-outline-info:hover {
+    background: var(--navy);
+    color: white;
+}
+.btn-outline-warning {
+    color: var(--burgundy);
+    border-color: var(--burgundy-light);
+    font-size: 0.82rem;
+}
+.btn-outline-warning:hover {
+    background: var(--burgundy);
+    color: white;
+    border-color: var(--burgundy);
+}
+.btn-outline-success {
+    color: var(--sage);
+    border-color: var(--sage);
+    font-size: 0.82rem;
+}
+.btn-outline-success:hover {
+    background: var(--sage);
+    color: white;
+}
+.btn-outline-light {
+    font-size: 0.8rem;
+}
+
+/* Individual result */
+#resultado-individual {
+    background: var(--paper-alt);
+    border: 1px solid var(--border-light);
+    border-radius: 2px;
+    padding: 0.75rem;
+    min-height: 60px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+}
+
+/* Inputs */
+.form-control, .input-group-text {
+    border-radius: 2px;
+    font-size: 0.85rem;
+    border-color: var(--border);
+}
+.form-control:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 2px rgba(27, 42, 74, 0.15);
+}
+
+/* Footer */
+footer {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.75rem;
+    color: #888;
+    border-top: 1px solid var(--border-light);
+    padding-top: 1rem;
+    font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .metric-value {
+        font-size: 1.1rem;
+    }
+    .container-fluid {
+        padding: 0.5rem !important;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--paper);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+/* Print styles for academic output */
+@media print {
+    .navbar, .btn, .form-range, .nav-tabs {
+        display: none !important;
+    }
+    body {
+        font-size: 10pt;
+        background: white;
+    }
+    .card {
+        border: 1px solid #000;
+        break-inside: avoid;
+    }
+}
