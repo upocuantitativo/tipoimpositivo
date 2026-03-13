@@ -208,6 +208,11 @@
                             <i class="bi bi-arrow-left-right"></i> Comparativa
                         </button>
                     </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rl">
+                            <i class="bi bi-robot"></i> Simulación RL
+                        </button>
+                    </li>
                 </ul>
 
                 <div class="tab-content">
@@ -339,6 +344,119 @@
                                                 <tbody></tbody>
                                             </table>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Tab Simulación RL -->
+                    <div class="tab-pane fade" id="tab-rl">
+                        <div class="card border-top-0 rounded-top-0">
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Configuración del agente RL</h6>
+                                        <p class="small text-muted mb-2">
+                                            El agente explora combinaciones de tipos impositivos mediante Q-learning,
+                                            buscando la configuración óptima según el objetivo seleccionado.
+                                        </p>
+                                        <div class="mb-2">
+                                            <label class="form-label small fw-bold mb-1">Objetivo de optimización</label>
+                                            <select id="rl-objetivo" class="form-select form-select-sm">
+                                                <option value="max_recaudacion">Maximizar recaudación total</option>
+                                                <option value="min_carga_media">Minimizar carga media ciudadanos</option>
+                                                <option value="equilibrio" selected>Equilibrio: recaudación vs equidad</option>
+                                                <option value="max_progresividad">Maximizar progresividad</option>
+                                            </select>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold mb-1">Episodios</label>
+                                                <input type="number" id="rl-episodios" class="form-control form-control-sm" value="200" min="50" max="1000" step="50">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold mb-1">Tasa aprendizaje (α)</label>
+                                                <input type="number" id="rl-alpha" class="form-control form-control-sm" value="0.15" min="0.01" max="1" step="0.01">
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold mb-1">Factor exploración (ε)</label>
+                                                <input type="number" id="rl-epsilon" class="form-control form-control-sm" value="0.3" min="0.01" max="1" step="0.01">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold mb-1">Descuento (γ)</label>
+                                                <input type="number" id="rl-gamma" class="form-control form-control-sm" value="0.95" min="0.5" max="0.99" step="0.01">
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-sm text-white w-100 mb-2" style="background:#1b2a4a;" id="btn-rl-iniciar" onclick="iniciarRL()">
+                                            <i class="bi bi-play-fill"></i> Iniciar entrenamiento
+                                        </button>
+                                        <div class="progress mb-2" style="height:6px; display:none;" id="rl-progress-bar">
+                                            <div class="progress-bar" role="progressbar" style="width:0%;background:#2d6a4f;" id="rl-progress"></div>
+                                        </div>
+                                        <div id="rl-status" class="small text-muted"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Evolución de la recompensa</h6>
+                                        <canvas id="chart-rl-reward" height="250"></canvas>
+                                    </div>
+                                </div>
+                                <div class="row mb-3" id="rl-resultados" style="display:none;">
+                                    <div class="col-12">
+                                        <h6 class="fw-bold">Mejor escenario encontrado por el agente</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-4">
+                                                <div class="card bg-light">
+                                                    <div class="card-body py-2 text-center">
+                                                        <div class="small text-muted">Recompensa máxima</div>
+                                                        <div class="fw-bold" id="rl-mejor-reward" style="font-size:1.2rem; color:#2d6a4f;">—</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card bg-light">
+                                                    <div class="card-body py-2 text-center">
+                                                        <div class="small text-muted">Recaudación total</div>
+                                                        <div class="fw-bold" id="rl-mejor-recaudacion" style="font-size:1.2rem; color:#1b2a4a;">—</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card bg-light">
+                                                    <div class="card-body py-2 text-center">
+                                                        <div class="small text-muted">Tipo efectivo medio</div>
+                                                        <div class="fw-bold" id="rl-mejor-tipo-ef" style="font-size:1.2rem; color:#8b1a2b;">—</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Tipos óptimos por tramo</h6>
+                                        <canvas id="chart-rl-tramos" height="250"></canvas>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Comparativa: actual vs óptimo RL</h6>
+                                        <canvas id="chart-rl-comparativa" height="250"></canvas>
+                                    </div>
+                                    <div class="col-12 mt-3">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover" id="tabla-rl">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th>Tramo</th>
+                                                        <th class="text-end">Tipo actual (%)</th>
+                                                        <th class="text-end">Tipo óptimo RL (%)</th>
+                                                        <th class="text-end">Diferencia (p.p.)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody></tbody>
+                                            </table>
+                                        </div>
+                                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="aplicarEscenarioRL()">
+                                            <i class="bi bi-check2-circle"></i> Aplicar escenario óptimo al simulador
+                                        </button>
                                     </div>
                                 </div>
                             </div>

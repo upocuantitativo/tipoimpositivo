@@ -595,3 +595,263 @@ async function calcularIndividual() {
         <div class="d-flex justify-content-between"><span>Tipo ef. actual:</span><span>${fmtPct(data.actual.tipo_efectivo)}</span></div>
         <div class="d-flex justify-content-between"><span>Tipo ef. nuevo:</span><span>${fmtPct(data.nuevo.tipo_efectivo)}</span></div>`;
 }
+
+// ===================== SIMULACIÓN RL =====================
+let rlChart = null;
+let rlTramosChart = null;
+let rlCompChart = null;
+let rlMejorEscenario = null;
+let rlRunning = false;
+
+const TRAMOS_BASE = [19.0, 24.0, 30.0, 37.0, 45.0, 47.0];
+const TRAMO_NOMBRES = ['0-12.450€', '12.450-20.200€', '20.200-35.200€', '35.200-60.000€', '60.000-300.000€', '>300.000€'];
+
+function calcularRecompensa(resultado, objetivo) {
+    const rec = resultado.recaudacion_total;
+    const diffRec = resultado.diff_recaudacion;
+    const tipoEf = resultado.tipo_efectivo_medio;
+    const prog = resultado.progresividad;
+
+    switch (objetivo) {
+        case 'max_recaudacion':
+            return rec / 1e9;  // Normalizar a miles de millones
+        case 'min_carga_media':
+            return -tipoEf + (rec > 60000 ? 0 : -100);  // Penalizar recaudación muy baja
+        case 'equilibrio':
+            return (rec / 1e9) * 0.4 + prog * 0.3 - Math.abs(tipoEf - 20) * 0.1;
+        case 'max_progresividad':
+            return prog * 2 + (rec > 70000 ? 0 : -50);  // Penalizar si baja mucho
+        default:
+            return rec / 1e9;
+    }
+}
+
+function generarAccion(estado, epsilon) {
+    const accion = [...estado];
+    if (Math.random() < epsilon) {
+        // Exploración: cambio aleatorio en un tramo
+        const idx = Math.floor(Math.random() * 6);
+        const delta = (Math.random() - 0.5) * 10;  // ±5 p.p.
+        accion[idx] = Math.max(1, Math.min(55, Math.round((accion[idx] + delta) * 2) / 2));
+    } else {
+        // Explotación: perturbación pequeña
+        const idx = Math.floor(Math.random() * 6);
+        const delta = (Math.random() - 0.5) * 4;  // ±2 p.p.
+        accion[idx] = Math.max(1, Math.min(55, Math.round((accion[idx] + delta) * 2) / 2));
+    }
+    // Mantener progresividad: cada tramo >= anterior
+    for (let i = 1; i < 6; i++) {
+        if (accion[i] < accion[i - 1]) accion[i] = accion[i - 1];
+    }
+    return accion;
+}
+
+async function simularBatch(escenarios) {
+    const resp = await fetch('/api/simular_batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ escenarios: escenarios.map(t => ({ tramos: t, tipo_is: tipoIS })) })
+    });
+    const data = await resp.json();
+    return data.resultados;
+}
+
+async function iniciarRL() {
+    if (rlRunning) return;
+    rlRunning = true;
+
+    const btn = document.getElementById('btn-rl-iniciar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Entrenando...';
+
+    const episodios = parseInt(document.getElementById('rl-episodios').value) || 200;
+    const alpha = parseFloat(document.getElementById('rl-alpha').value) || 0.15;
+    const epsilonInicial = parseFloat(document.getElementById('rl-epsilon').value) || 0.3;
+    const gamma = parseFloat(document.getElementById('rl-gamma').value) || 0.95;
+    const objetivo = document.getElementById('rl-objetivo').value;
+
+    document.getElementById('rl-progress-bar').style.display = 'block';
+    document.getElementById('rl-status').textContent = 'Inicializando agente...';
+
+    // Inicializar chart de recompensas
+    const canvas = document.getElementById('chart-rl-reward');
+    if (rlChart) rlChart.destroy();
+    rlChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Recompensa episodio', data: [], borderColor: 'rgba(27,42,74,0.4)',
+                  pointRadius: 1, borderWidth: 1, fill: false },
+                { label: 'Mejor acumulada', data: [], borderColor: '#2d6a4f',
+                  pointRadius: 0, borderWidth: 2.5, fill: false },
+                { label: 'Media móvil (20)', data: [], borderColor: '#c7a63b',
+                  pointRadius: 0, borderWidth: 2, borderDash: [4, 2], fill: false }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: { duration: 0 },
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+            scales: { x: { title: { display: true, text: 'Episodio' } },
+                      y: { title: { display: true, text: 'Recompensa' } } }
+        }
+    });
+
+    // RL loop
+    let estado = [...TRAMOS_BASE];
+    let mejorReward = -Infinity;
+    let mejorTramos = [...estado];
+    let mejorResultado = null;
+    const rewardHistory = [];
+    const mejorHistory = [];
+    const mediaHistory = [];
+    const batchSize = 5;
+
+    for (let ep = 0; ep < episodios; ep += batchSize) {
+        const batchEnd = Math.min(ep + batchSize, episodios);
+        const acciones = [];
+        for (let b = ep; b < batchEnd; b++) {
+            const epsilon = epsilonInicial * (1 - b / episodios);  // Decay
+            acciones.push(generarAccion(estado, epsilon));
+        }
+
+        const resultados = await simularBatch(acciones);
+
+        for (let b = 0; b < resultados.length; b++) {
+            const reward = calcularRecompensa(resultados[b], objetivo);
+            const rewardAnterior = rewardHistory.length > 0 ? rewardHistory[rewardHistory.length - 1] : 0;
+
+            // Q-learning update del estado
+            const delta = alpha * (reward + gamma * mejorReward - rewardAnterior);
+            if (reward > mejorReward) {
+                mejorReward = reward;
+                mejorTramos = [...acciones[b]];
+                mejorResultado = resultados[b];
+                estado = [...acciones[b]];  // Mover al mejor estado
+            } else if (Math.random() < 0.3) {
+                // Ocasionalmente aceptar estados peores para diversificar
+                estado = [...acciones[b]];
+            }
+
+            rewardHistory.push(reward);
+            mejorHistory.push(mejorReward);
+
+            // Media móvil
+            const windowSize = 20;
+            const start = Math.max(0, rewardHistory.length - windowSize);
+            const slice = rewardHistory.slice(start);
+            mediaHistory.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+        }
+
+        // Actualizar gráfico
+        rlChart.data.labels = rewardHistory.map((_, i) => i + 1);
+        rlChart.data.datasets[0].data = [...rewardHistory];
+        rlChart.data.datasets[1].data = [...mejorHistory];
+        rlChart.data.datasets[2].data = [...mediaHistory];
+        rlChart.update('none');
+
+        // Progreso
+        const pct = Math.round((batchEnd / episodios) * 100);
+        document.getElementById('rl-progress').style.width = pct + '%';
+        document.getElementById('rl-status').textContent =
+            `Episodio ${batchEnd}/${episodios} — Mejor recompensa: ${mejorReward.toFixed(3)} — ε: ${(epsilonInicial * (1 - batchEnd / episodios)).toFixed(3)}`;
+
+        // Yield para UI
+        await new Promise(r => setTimeout(r, 10));
+    }
+
+    // Guardar resultado
+    rlMejorEscenario = { tramos: mejorTramos, resultado: mejorResultado };
+    mostrarResultadosRL(mejorTramos, mejorResultado, mejorReward);
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> Iniciar entrenamiento';
+    document.getElementById('rl-status').textContent =
+        `Entrenamiento completado — ${episodios} episodios — Mejor recompensa: ${mejorReward.toFixed(3)}`;
+    rlRunning = false;
+}
+
+function mostrarResultadosRL(tramos, resultado, reward) {
+    document.getElementById('rl-resultados').style.display = 'flex';
+    document.getElementById('rl-resultados').classList.add('flex-wrap');
+    document.getElementById('rl-mejor-reward').textContent = reward.toFixed(3);
+    document.getElementById('rl-mejor-recaudacion').textContent = fmtEur(resultado.recaudacion_total);
+    document.getElementById('rl-mejor-tipo-ef').textContent = resultado.tipo_efectivo_medio.toFixed(1) + '%';
+
+    // Gráfico de tramos óptimos vs actuales
+    const canvasT = document.getElementById('chart-rl-tramos');
+    if (rlTramosChart) rlTramosChart.destroy();
+    rlTramosChart = new Chart(canvasT, {
+        type: 'bar',
+        data: {
+            labels: TRAMO_NOMBRES,
+            datasets: [
+                { label: 'Actual', data: TRAMOS_BASE, backgroundColor: 'rgba(27,42,74,0.7)' },
+                { label: 'Óptimo RL', data: tramos, backgroundColor: 'rgba(45,106,79,0.7)' }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { title: { display: true, text: 'Tipo marginal (%)' }, beginAtZero: true } }
+        }
+    });
+
+    // Gráfico comparativo de recaudación
+    const canvasC = document.getElementById('chart-rl-comparativa');
+    if (rlCompChart) rlCompChart.destroy();
+
+    // Obtener recaudación actual para comparar
+    const recActual = datosBase ? 86580 : 86580; // AEAT referencia
+    rlCompChart = new Chart(canvasC, {
+        type: 'bar',
+        data: {
+            labels: ['Recaudación IRPF', 'Recaudación IS', 'Total'],
+            datasets: [
+                { label: 'Actual', data: [86580, 26252, 86580 + 26252],
+                  backgroundColor: 'rgba(27,42,74,0.7)' },
+                { label: 'Óptimo RL', data: [resultado.recaudacion_irpf, resultado.recaudacion_is, resultado.recaudacion_total],
+                  backgroundColor: 'rgba(45,106,79,0.7)' }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { ticks: { callback: v => fmtEur(v) } } }
+        }
+    });
+
+    // Tabla
+    const tbody = document.querySelector('#tabla-rl tbody');
+    tbody.innerHTML = tramos.map((t, i) => {
+        const diff = t - TRAMOS_BASE[i];
+        const dc = diff > 0 ? 'diff-positive' : diff < 0 ? 'diff-negative' : 'diff-zero';
+        return `<tr>
+            <td>${TRAMO_NOMBRES[i]}</td>
+            <td class="text-end">${TRAMOS_BASE[i].toFixed(1)}%</td>
+            <td class="text-end fw-bold">${t.toFixed(1)}%</td>
+            <td class="text-end ${dc}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}</td>
+        </tr>`;
+    }).join('');
+}
+
+function aplicarEscenarioRL() {
+    if (!rlMejorEscenario) return;
+
+    const check = document.getElementById('tipo-unico-check');
+    if (check.checked) {
+        check.checked = false;
+        tipoUnicoActivo = false;
+        document.getElementById('tipo-unico-control').style.display = 'none';
+    }
+
+    rlMejorEscenario.tramos.forEach((tipo, i) => {
+        tramosActuales[i].tipo = tipo;
+        const sl = document.querySelector(`.tramo-slider[data-index="${i}"]`);
+        const inp = document.querySelector(`.tramo-input[data-index="${i}"]`);
+        if (sl) sl.value = tipo;
+        if (inp) inp.value = tipo;
+    });
+    simular();
+}

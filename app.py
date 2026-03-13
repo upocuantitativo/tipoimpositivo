@@ -131,6 +131,57 @@ def api_calcular_individual():
     })
 
 
+@app.route("/api/simular_batch", methods=["POST"])
+@login_required
+def api_simular_batch():
+    """
+    Simula múltiples escenarios en una sola petición.
+    Body JSON: { "escenarios": [ { "tramos": [...tipos...], "tipo_is": 25.0 }, ... ] }
+    Retorna resumen de cada escenario para el agente RL.
+    """
+    data = request.get_json()
+    if not data or "escenarios" not in data:
+        return jsonify({"error": "Datos no válidos"}), 400
+
+    resultados = []
+    for esc in data["escenarios"]:
+        tipos = esc.get("tramos", [19, 24, 30, 37, 45, 47])
+        tipo_is = float(esc.get("tipo_is", IS_TIPO_GENERAL))
+
+        tramos_nuevos = []
+        for i, t in enumerate(TRAMOS_ACTUALES):
+            tramos_nuevos.append({
+                "limite": t["limite"],
+                "tipo": float(tipos[i]) if i < len(tipos) else t["tipo"],
+                "nombre": t["nombre"]
+            })
+
+        resultado = comparar_escenarios(tramos_nuevos, tipo_is)
+        ea = resultado["escenario_actual"]
+        en = resultado["escenario_nuevo"]
+
+        # Calcular tipo efectivo medio ponderado
+        total_cuota = sum(g["recaudacion_total"] for g in en["detalle_irpf"])
+        total_base = sum(g["declarantes"] * g["renta_media"] for g in en["detalle_irpf"])
+        tipo_ef_medio = (total_cuota / total_base * 100) if total_base > 0 else 0
+
+        # Índice de progresividad (ratio entre tipo ef. último/primer tramo)
+        tipos_ef = [g.get("tipo_efectivo", 0) for g in en["detalle_irpf"]]
+        progresividad = (tipos_ef[-1] / tipos_ef[0]) if tipos_ef[0] > 0 else 0
+
+        resultados.append({
+            "recaudacion_irpf": en["recaudacion_irpf"],
+            "recaudacion_is": en["recaudacion_is"],
+            "recaudacion_total": en["recaudacion_total"],
+            "diff_recaudacion": resultado["diferencia_recaudacion_total"],
+            "tipo_efectivo_medio": round(tipo_ef_medio, 2),
+            "progresividad": round(progresividad, 2),
+            "tipos": tipos,
+        })
+
+    return jsonify({"resultados": resultados})
+
+
 @app.route("/api/datos_base")
 @login_required
 def api_datos_base():
