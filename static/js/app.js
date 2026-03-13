@@ -11,6 +11,7 @@ let tipoIS = 25.0;
 let charts = {};
 let debounceTimer = null;
 let tipoUnicoActivo = false;
+let ultimoCcaaData = null; // Almacena datos CCAA para click handlers
 
 // Colores
 const COLORS = {
@@ -231,37 +232,37 @@ function actualizarGraficos(data) {
     charts.recaudacionIRPF.data = { labels: labelsIRPF, datasets: [
         { label: 'Actual', data: ea.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.actual },
         { label: 'Simulado', data: en.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.nuevo }
-    ]}; charts.recaudacionIRPF.update();
+    ]}; charts.recaudacionIRPF.update('none');
 
     charts.recaudacionIS.data = { labels: en.detalle_is.map(e => e.tipo_empresa.split('(')[0].trim()),
         datasets: [{ data: en.detalle_is.map(e => e.recaudacion_total), backgroundColor: COLORS.palette }]
-    }; charts.recaudacionIS.update();
+    }; charts.recaudacionIS.update('none');
 
     charts.comparativaTotal.data = { labels: ['IRPF', 'Imp. Sociedades', 'Total'], datasets: [
         { label: 'Actual', data: [ea.recaudacion_irpf, ea.recaudacion_is, ea.recaudacion_irpf + ea.recaudacion_is], backgroundColor: COLORS.actual },
         { label: 'Simulado', data: [en.recaudacion_irpf, en.recaudacion_is, en.recaudacion_irpf + en.recaudacion_is], backgroundColor: COLORS.nuevo }
-    ]}; charts.comparativaTotal.update();
+    ]}; charts.comparativaTotal.update('none');
 
     const dc = data.diferencias_ciudadanos;
     charts.tipoEfectivo.data = { labels: dc.map(c => c.nombre), datasets: [
         { label: 'Tipo ef. actual', data: dc.map(c => c.tipo_efectivo_actual), backgroundColor: COLORS.actual },
         { label: 'Tipo ef. nuevo', data: dc.map(c => c.tipo_efectivo_nuevo), backgroundColor: COLORS.nuevo }
-    ]}; charts.tipoEfectivo.update();
+    ]}; charts.tipoEfectivo.update('none');
 
     charts.cuotaCiudadanos.data = { labels: dc.map(c => c.nombre), datasets: [
         { label: 'Cuota actual', data: dc.map(c => c.cuota_actual), backgroundColor: COLORS.actual },
         { label: 'Cuota nueva', data: dc.map(c => c.cuota_nueva), backgroundColor: COLORS.nuevo }
-    ]}; charts.cuotaCiudadanos.update();
+    ]}; charts.cuotaCiudadanos.update('none');
 
     const de = data.diferencias_empresas;
     charts.costeEmpresas.data = { labels: de.map(e => e.tipo_empresa.split('(')[0].trim()), datasets: [
         { label: 'Cuota IS actual', data: de.map(e => e.cuota_actual), backgroundColor: COLORS.actual },
         { label: 'Cuota IS nueva', data: de.map(e => e.cuota_nueva), backgroundColor: COLORS.nuevo }
-    ]}; charts.costeEmpresas.update();
+    ]}; charts.costeEmpresas.update('none');
 
     charts.beneficioNeto.data = { labels: en.detalle_is.map(e => e.tipo_empresa.split('(')[0].trim()),
         datasets: [{ label: 'Beneficio neto (tras IS)', data: en.detalle_is.map(e => e.beneficio_neto), backgroundColor: COLORS.palette }]
-    }; charts.beneficioNeto.update();
+    }; charts.beneficioNeto.update('none');
 
     const rentas = [5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 60000, 80000, 100000, 150000, 200000, 300000, 500000];
     const tiposActual = rentas.map(r => calcTipoEfectivoLocal(r, datosBase.tramos));
@@ -269,12 +270,12 @@ function actualizarGraficos(data) {
     charts.curvaTipo.data = { labels: rentas, datasets: [
         { label: 'Tipo efectivo actual', data: tiposActual, borderColor: COLORS.actual, backgroundColor: 'transparent', tension: 0.3, borderWidth: 2, pointRadius: 3 },
         { label: 'Tipo efectivo nuevo', data: tiposNuevo, borderColor: COLORS.accent, backgroundColor: 'transparent', tension: 0.3, borderWidth: 2, pointRadius: 3 }
-    ]}; charts.curvaTipo.update();
+    ]}; charts.curvaTipo.update('none');
 
     charts.recaudacionGrupo.data = { labels: labelsIRPF, datasets: [
         { label: 'Actual', data: ea.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.actual },
         { label: 'Simulado', data: en.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.accent }
-    ]}; charts.recaudacionGrupo.update();
+    ]}; charts.recaudacionGrupo.update('none');
 }
 
 function calcTipoEfectivoLocal(renta, tramos) {
@@ -332,9 +333,43 @@ function actualizarTablas(data) {
 }
 
 // ===================== MAPA CCAA (polígonos reales) =====================
+function mostrarDetalleCCAA(id) {
+    if (!ultimoCcaaData) return;
+    const c = ultimoCcaaData.find(x => x.id === id);
+    if (!c || c.declarantes === 0) return;
+
+    const diffCuota = c.cuota_media_nueva - c.cuota_media_actual;
+    const diffRec = c.recaudacion_nueva - c.recaudacion_actual;
+    const tipoEfActual = c.renta_media > 0 ? (c.cuota_media_actual / c.renta_media * 100) : 0;
+    const tipoEfNuevo = c.renta_media > 0 ? (c.cuota_media_nueva / c.renta_media * 100) : 0;
+    const colorDiff = diffRec > 0 ? '#2d6a4f' : diffRec < 0 ? '#8b1a2b' : '#555';
+
+    document.getElementById('ccaa-detalle-titulo').textContent = c.nombre;
+    document.getElementById('ccaa-detalle-contenido').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1.5rem;">
+            <div><strong>Declarantes:</strong> ${c.declarantes.toLocaleString('es-ES')}</div>
+            <div><strong>Renta media:</strong> ${fmtEur(c.renta_media)}</div>
+            <div><strong>Diferencial autonómico:</strong> ${c.diferencial_autonomico >= 0 ? '+' : ''}${c.diferencial_autonomico} p.p.</div>
+            <div>&nbsp;</div>
+            <div style="border-top:1px solid #e8e3db;padding-top:0.4rem;"><strong>Cuota media actual:</strong> ${fmtEur(c.cuota_media_actual)}</div>
+            <div style="border-top:1px solid #e8e3db;padding-top:0.4rem;"><strong>Cuota media simulada:</strong> ${fmtEur(c.cuota_media_nueva)}</div>
+            <div><strong>Tipo efectivo actual:</strong> ${tipoEfActual.toFixed(1)}%</div>
+            <div><strong>Tipo efectivo simulado:</strong> ${tipoEfNuevo.toFixed(1)}%</div>
+            <div><strong>Recaudación actual:</strong> ${fmtEur(c.recaudacion_actual)}</div>
+            <div><strong>Recaudación simulada:</strong> ${fmtEur(c.recaudacion_nueva)}</div>
+        </div>
+        <div style="margin-top:0.6rem;padding-top:0.4rem;border-top:1px solid #e8e3db;">
+            <strong style="color:${colorDiff};">Diferencia recaudación: ${diffRec >= 0 ? '+' : ''}${fmtEur(diffRec)}</strong>
+            &nbsp;|&nbsp;
+            <strong style="color:${colorDiff};">Diferencia cuota media: ${diffCuota >= 0 ? '+' : ''}${fmtEur(diffCuota)}</strong>
+        </div>`;
+    document.getElementById('ccaa-detalle').style.display = 'block';
+}
+
 function actualizarMapa(data) {
     const ccaaData = data.detalle_ccaa;
     if (!ccaaData || typeof SPAIN_CCAA_PATHS === 'undefined') return;
+    ultimoCcaaData = ccaaData;
 
     const container = document.getElementById('mapa-espana');
     if (!container) return;
@@ -370,19 +405,17 @@ function actualizarMapa(data) {
         if (info && info.declarantes > 0) {
             const ratio = info.diff / maxDiff;
             if (ratio > 0.02) {
-                // Verde: más recaudación
                 const t = Math.min(Math.abs(ratio), 1);
-                const r = Math.round(230 - t * 185);  // 230 -> 45
-                const g = Math.round(230 - t * 84);   // 230 -> 146
-                const b = Math.round(230 - t * 151);   // 230 -> 79
+                const r = Math.round(230 - t * 185);
+                const g = Math.round(230 - t * 84);
+                const b = Math.round(230 - t * 151);
                 fill = `rgb(${r},${g},${b})`;
                 textColor = t > 0.4 ? '#fff' : '#1b2a4a';
             } else if (ratio < -0.02) {
-                // Rojo/burdeos: menos recaudación
                 const t = Math.min(Math.abs(ratio), 1);
-                const r = Math.round(230 - t * 91);   // 230 -> 139
-                const g = Math.round(230 - t * 204);  // 230 -> 26
-                const b = Math.round(230 - t * 187);  // 230 -> 43
+                const r = Math.round(230 - t * 91);
+                const g = Math.round(230 - t * 204);
+                const b = Math.round(230 - t * 187);
                 fill = `rgb(${r},${g},${b})`;
                 textColor = t > 0.4 ? '#fff' : '#1b2a4a';
             } else {
@@ -396,10 +429,12 @@ function actualizarMapa(data) {
             ? `${info.nombre}: ${info.diff >= 0 ? '+' : ''}${fmtEur(info.diff)}\nCuota media: ${info.cuotaDiff >= 0 ? '+' : ''}${fmtEur(info.cuotaDiff)}`
             : geo.label;
 
-        // Path del polígono
+        const clickable = info && info.declarantes > 0;
         svg += `<path d="${geo.path}" fill="${fill}" stroke="${strokeColor}" stroke-width="1.2"
-                  stroke-linejoin="round" style="cursor:pointer;transition:opacity 0.15s;"
-                  onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
+                  stroke-linejoin="round" data-ccaa="${id}"
+                  style="cursor:${clickable ? 'pointer' : 'default'};transition:opacity 0.15s;"
+                  onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1"
+                  ${clickable ? `onclick="mostrarDetalleCCAA('${id}')"` : ''}>
                   <title>${tooltip}</title></path>`;
 
         // Etiqueta centrada
@@ -417,6 +452,14 @@ function actualizarMapa(data) {
 
     svg += '</svg>';
     container.innerHTML = svg;
+
+    // Actualizar detalle si estaba abierto
+    const detalleDiv = document.getElementById('ccaa-detalle');
+    if (detalleDiv && detalleDiv.style.display !== 'none') {
+        const tituloActual = document.getElementById('ccaa-detalle-titulo').textContent;
+        const ccaaAbierta = ccaaData.find(c => c.nombre === tituloActual);
+        if (ccaaAbierta) mostrarDetalleCCAA(ccaaAbierta.id);
+    }
 
     // Tabla de CCAA
     const tbody = document.querySelector('#tabla-ccaa tbody');
