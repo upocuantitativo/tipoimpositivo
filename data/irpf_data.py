@@ -195,6 +195,150 @@ PERFILES_EMPRESAS = [
     },
 ]
 
+# =============================================================================
+# DATOS POR COMUNIDADES AUTÓNOMAS
+# Fuentes: AEAT (estadísticas IRPF modelo 100, ejercicio 2020/2021),
+# INE, Ministerio de Hacienda.
+# Navarra y País Vasco tienen régimen foral propio (no declaran ante AEAT).
+# diferencial_autonomico: puntos porcentuales de diferencia respecto a la
+# tarifa autonómica media nacional (negativo = menor carga, positivo = mayor).
+# =============================================================================
+DATOS_CCAA = [
+    {
+        "id": "AND",
+        "nombre": "Andalucía",
+        "declarantes": 3_400_000,
+        "renta_media": 18_500,
+        "diferencial_autonomico": -0.5,
+    },
+    {
+        "id": "ARA",
+        "nombre": "Aragón",
+        "declarantes": 620_000,
+        "renta_media": 22_500,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "AST",
+        "nombre": "Asturias",
+        "declarantes": 500_000,
+        "renta_media": 21_000,
+        "diferencial_autonomico": 0.5,
+    },
+    {
+        "id": "BAL",
+        "nombre": "Baleares",
+        "declarantes": 530_000,
+        "renta_media": 22_000,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "CAN",
+        "nombre": "Canarias",
+        "declarantes": 870_000,
+        "renta_media": 17_500,
+        "diferencial_autonomico": -0.5,
+    },
+    {
+        "id": "CNT",
+        "nombre": "Cantabria",
+        "declarantes": 270_000,
+        "renta_media": 21_500,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "CYL",
+        "nombre": "Castilla y León",
+        "declarantes": 1_100_000,
+        "renta_media": 20_500,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "CLM",
+        "nombre": "Castilla-La Mancha",
+        "declarantes": 820_000,
+        "renta_media": 18_000,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "CAT",
+        "nombre": "Cataluña",
+        "declarantes": 3_500_000,
+        "renta_media": 26_000,
+        "diferencial_autonomico": 1.0,
+    },
+    {
+        "id": "VAL",
+        "nombre": "C. Valenciana",
+        "declarantes": 2_100_000,
+        "renta_media": 19_500,
+        "diferencial_autonomico": 0.5,
+    },
+    {
+        "id": "EXT",
+        "nombre": "Extremadura",
+        "declarantes": 430_000,
+        "renta_media": 16_500,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "GAL",
+        "nombre": "Galicia",
+        "declarantes": 1_200_000,
+        "renta_media": 19_500,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "MAD",
+        "nombre": "Madrid",
+        "declarantes": 3_200_000,
+        "renta_media": 29_000,
+        "diferencial_autonomico": -1.5,
+    },
+    {
+        "id": "MUR",
+        "nombre": "Murcia",
+        "declarantes": 600_000,
+        "renta_media": 18_000,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "NAV",
+        "nombre": "Navarra",
+        "declarantes": 0,
+        "renta_media": 25_000,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "PVA",
+        "nombre": "País Vasco",
+        "declarantes": 0,
+        "renta_media": 27_000,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "RIO",
+        "nombre": "La Rioja",
+        "declarantes": 150_000,
+        "renta_media": 21_000,
+        "diferencial_autonomico": 0.0,
+    },
+    {
+        "id": "CEU",
+        "nombre": "Ceuta",
+        "declarantes": 30_000,
+        "renta_media": 20_000,
+        "diferencial_autonomico": -3.0,
+    },
+    {
+        "id": "MEL",
+        "nombre": "Melilla",
+        "declarantes": 28_000,
+        "renta_media": 19_500,
+        "diferencial_autonomico": -3.0,
+    },
+]
+
 # Tipos del Impuesto de Sociedades vigentes
 IS_TIPO_GENERAL = 25.0
 IS_TIPO_PYME = 23.0       # Cifra de negocio < 1M€
@@ -372,6 +516,78 @@ def simular_recaudacion(tramos, tipo_is=None):
     }
 
 
+def simular_por_ccaa(tramos, tipo_is=None):
+    """
+    Simula la recaudación del IRPF desglosada por Comunidad Autónoma.
+
+    Para cada CCAA ajusta los tipos de los tramos aplicando el diferencial
+    autonómico (puntos porcentuales sobre la tarifa conjunta). Las CCAA con
+    régimen foral (Navarra y País Vasco, declarantes == 0) se incluyen pero
+    con recaudación 0 ante la AEAT.
+
+    Parámetros:
+        tramos:  Lista de tramos con 'limite' y 'tipo' (%).
+        tipo_is: Tipo del IS (no se usa en el cálculo por CCAA, se acepta
+                 por coherencia de firma con simular_recaudacion).
+
+    Retorna:
+        Lista de dicts, uno por CCAA, con:
+            id, nombre, declarantes, renta_media,
+            cuota_media_actual, recaudacion_actual,
+            cuota_media_nueva,  recaudacion_nueva.
+    """
+    # Tramos actuales ajustados por diferencial para el escenario "nuevo"
+    resultado_ccaa = []
+
+    for ccaa in DATOS_CCAA:
+        if ccaa["declarantes"] == 0:
+            # Régimen foral: sin declarantes ante AEAT
+            resultado_ccaa.append({
+                "id": ccaa["id"],
+                "nombre": ccaa["nombre"],
+                "declarantes": 0,
+                "renta_media": ccaa["renta_media"],
+                "diferencial_autonomico": ccaa["diferencial_autonomico"],
+                "cuota_media_actual": 0.0,
+                "recaudacion_actual": 0.0,
+                "cuota_media_nueva": 0.0,
+                "recaudacion_nueva": 0.0,
+            })
+            continue
+
+        dif = ccaa["diferencial_autonomico"]
+        renta = ccaa["renta_media"]
+        declarantes = ccaa["declarantes"]
+
+        # Tramos actuales ajustados por diferencial autonómico
+        tramos_actuales_ccaa = [
+            {**t, "tipo": max(0.0, t["tipo"] + dif)}
+            for t in TRAMOS_ACTUALES
+        ]
+        # Tramos nuevos ajustados por diferencial autonómico
+        tramos_nuevos_ccaa = [
+            {**t, "tipo": max(0.0, t["tipo"] + dif)}
+            for t in tramos
+        ]
+
+        cuota_actual = calcular_irpf(renta, tramos_actuales_ccaa)["cuota"]
+        cuota_nueva = calcular_irpf(renta, tramos_nuevos_ccaa)["cuota"]
+
+        resultado_ccaa.append({
+            "id": ccaa["id"],
+            "nombre": ccaa["nombre"],
+            "declarantes": declarantes,
+            "renta_media": renta,
+            "diferencial_autonomico": dif,
+            "cuota_media_actual": round(cuota_actual, 2),
+            "recaudacion_actual": round(cuota_actual * declarantes, 2),
+            "cuota_media_nueva": round(cuota_nueva, 2),
+            "recaudacion_nueva": round(cuota_nueva * declarantes, 2),
+        })
+
+    return resultado_ccaa
+
+
 def comparar_escenarios(tramos_nuevos, tipo_is_nuevo=None):
     """
     Compara el escenario vigente con un escenario hipotético.
@@ -403,6 +619,8 @@ def comparar_escenarios(tramos_nuevos, tipo_is_nuevo=None):
             "coste_total_nuevo": nue["coste_fiscal_total"],
         })
 
+    detalle_ccaa = simular_por_ccaa(tramos_nuevos, tipo_is_nuevo)
+
     return {
         "escenario_actual": actual,
         "escenario_nuevo": nuevo,
@@ -417,4 +635,5 @@ def comparar_escenarios(tramos_nuevos, tipo_is_nuevo=None):
         ),
         "diferencias_ciudadanos": diferencias_ciudadanos,
         "diferencias_empresas": diferencias_empresas,
+        "detalle_ccaa": detalle_ccaa,
     }

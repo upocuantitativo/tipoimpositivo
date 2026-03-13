@@ -17,6 +17,7 @@ from data.irpf_data import (
     DISTRIBUCION_DECLARANTES,
     PERFILES_CIUDADANOS,
     PERFILES_EMPRESAS,
+    DATOS_CCAA,
     IS_TIPO_GENERAL,
     calcular_irpf,
     simular_recaudacion,
@@ -152,6 +153,7 @@ def api_datos_base():
         } for e in PERFILES_EMPRESAS],
         "distribucion": DISTRIBUCION_DECLARANTES,
         "tipo_is": IS_TIPO_GENERAL,
+        "ccaa": DATOS_CCAA,
     })
 
 

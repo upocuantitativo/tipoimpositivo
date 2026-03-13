@@ -10,3 +10,5 @@ build/
 .idea/
 .vscode/
 *.db
+.claude/
+2023_02.pdf
