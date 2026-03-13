@@ -30,6 +30,7 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 # Usuarios autorizados (hash de contraseña)
 USUARIOS = {
     "jaime": generate_password_hash("Jaime26$"),
+    "manolo": generate_password_hash("Manolo26$"),
 }
 
 

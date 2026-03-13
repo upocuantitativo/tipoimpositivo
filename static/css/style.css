@@ -316,3 +316,20 @@ footer {
         break-inside: avoid;
     }
 }
+
+/* Leaflet map CCAA styles */
+.ccaa-path {
+    transition: fill 0.4s ease, fill-opacity 0.3s ease;
+}
+.ccaa-tooltip {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.82rem;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 4px 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+#mapa-espana {
+    background: #f0f4f8;
+}

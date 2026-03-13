@@ -12,6 +12,20 @@ let charts = {};
 let debounceTimer = null;
 let tipoUnicoActivo = false;
 let ultimoCcaaData = null; // Almacena datos CCAA para click handlers
+let leafletMap = null;     // Instancia Leaflet
+let geojsonLayer = null;   // Capa GeoJSON
+let geojsonData = null;    // Datos GeoJSON cargados
+
+// Mapa de nombre GeoJSON -> ID interno CCAA
+const CCAA_NAME_TO_ID = {
+    'Andalucia': 'AND', 'Aragon': 'ARA', 'Asturias': 'AST',
+    'Baleares': 'BAL', 'Canarias': 'CAN', 'Cantabria': 'CNT',
+    'Castilla-La Mancha': 'CLM', 'Castilla-Leon': 'CYL',
+    'Cataluña': 'CAT', 'Valencia': 'VAL', 'Extremadura': 'EXT',
+    'Galicia': 'GAL', 'Madrid': 'MAD', 'Murcia': 'MUR',
+    'Navarra': 'NAV', 'Pais Vasco': 'PVA', 'La Rioja': 'RIO',
+    'Ceuta': 'CEU', 'Melilla': 'MEL'
+};
 
 // Colores
 const COLORS = {
@@ -173,6 +187,11 @@ function setDiffElement(id, diff) {
 function initCharts() {
     Chart.defaults.font.family = "'Source Sans 3', 'Segoe UI', system-ui, sans-serif";
     Chart.defaults.font.size = 11;
+    // Transición suave desde posición actual (no crecer desde 0)
+    Chart.defaults.animation = { duration: 350, easing: 'easeOutQuart' };
+    Chart.defaults.transitions = {
+        active: { animation: { duration: 250 } }
+    };
 
     const barOpts = (yCb) => ({
         responsive: true,
@@ -232,37 +251,37 @@ function actualizarGraficos(data) {
     charts.recaudacionIRPF.data = { labels: labelsIRPF, datasets: [
         { label: 'Actual', data: ea.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.actual },
         { label: 'Simulado', data: en.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.nuevo }
-    ]}; charts.recaudacionIRPF.update('none');
+    ]}; charts.recaudacionIRPF.update();
 
     charts.recaudacionIS.data = { labels: en.detalle_is.map(e => e.tipo_empresa.split('(')[0].trim()),
         datasets: [{ data: en.detalle_is.map(e => e.recaudacion_total), backgroundColor: COLORS.palette }]
-    }; charts.recaudacionIS.update('none');
+    }; charts.recaudacionIS.update();
 
     charts.comparativaTotal.data = { labels: ['IRPF', 'Imp. Sociedades', 'Total'], datasets: [
         { label: 'Actual', data: [ea.recaudacion_irpf, ea.recaudacion_is, ea.recaudacion_irpf + ea.recaudacion_is], backgroundColor: COLORS.actual },
         { label: 'Simulado', data: [en.recaudacion_irpf, en.recaudacion_is, en.recaudacion_irpf + en.recaudacion_is], backgroundColor: COLORS.nuevo }
-    ]}; charts.comparativaTotal.update('none');
+    ]}; charts.comparativaTotal.update();
 
     const dc = data.diferencias_ciudadanos;
     charts.tipoEfectivo.data = { labels: dc.map(c => c.nombre), datasets: [
         { label: 'Tipo ef. actual', data: dc.map(c => c.tipo_efectivo_actual), backgroundColor: COLORS.actual },
         { label: 'Tipo ef. nuevo', data: dc.map(c => c.tipo_efectivo_nuevo), backgroundColor: COLORS.nuevo }
-    ]}; charts.tipoEfectivo.update('none');
+    ]}; charts.tipoEfectivo.update();
 
     charts.cuotaCiudadanos.data = { labels: dc.map(c => c.nombre), datasets: [
         { label: 'Cuota actual', data: dc.map(c => c.cuota_actual), backgroundColor: COLORS.actual },
         { label: 'Cuota nueva', data: dc.map(c => c.cuota_nueva), backgroundColor: COLORS.nuevo }
-    ]}; charts.cuotaCiudadanos.update('none');
+    ]}; charts.cuotaCiudadanos.update();
 
     const de = data.diferencias_empresas;
     charts.costeEmpresas.data = { labels: de.map(e => e.tipo_empresa.split('(')[0].trim()), datasets: [
         { label: 'Cuota IS actual', data: de.map(e => e.cuota_actual), backgroundColor: COLORS.actual },
         { label: 'Cuota IS nueva', data: de.map(e => e.cuota_nueva), backgroundColor: COLORS.nuevo }
-    ]}; charts.costeEmpresas.update('none');
+    ]}; charts.costeEmpresas.update();
 
     charts.beneficioNeto.data = { labels: en.detalle_is.map(e => e.tipo_empresa.split('(')[0].trim()),
         datasets: [{ label: 'Beneficio neto (tras IS)', data: en.detalle_is.map(e => e.beneficio_neto), backgroundColor: COLORS.palette }]
-    }; charts.beneficioNeto.update('none');
+    }; charts.beneficioNeto.update();
 
     const rentas = [5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 60000, 80000, 100000, 150000, 200000, 300000, 500000];
     const tiposActual = rentas.map(r => calcTipoEfectivoLocal(r, datosBase.tramos));
@@ -270,12 +289,12 @@ function actualizarGraficos(data) {
     charts.curvaTipo.data = { labels: rentas, datasets: [
         { label: 'Tipo efectivo actual', data: tiposActual, borderColor: COLORS.actual, backgroundColor: 'transparent', tension: 0.3, borderWidth: 2, pointRadius: 3 },
         { label: 'Tipo efectivo nuevo', data: tiposNuevo, borderColor: COLORS.accent, backgroundColor: 'transparent', tension: 0.3, borderWidth: 2, pointRadius: 3 }
-    ]}; charts.curvaTipo.update('none');
+    ]}; charts.curvaTipo.update();
 
     charts.recaudacionGrupo.data = { labels: labelsIRPF, datasets: [
         { label: 'Actual', data: ea.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.actual },
         { label: 'Simulado', data: en.detalle_irpf.map(g => g.recaudacion_total), backgroundColor: COLORS.accent }
-    ]}; charts.recaudacionGrupo.update('none');
+    ]}; charts.recaudacionGrupo.update();
 }
 
 function calcTipoEfectivoLocal(renta, tramos) {
@@ -366,92 +385,134 @@ function mostrarDetalleCCAA(id) {
     document.getElementById('ccaa-detalle').style.display = 'block';
 }
 
-function actualizarMapa(data) {
-    const ccaaData = data.detalle_ccaa;
-    if (!ccaaData || typeof SPAIN_CCAA_PATHS === 'undefined') return;
-    ultimoCcaaData = ccaaData;
+function getColorForDiff(ratio) {
+    if (ratio > 0.02) {
+        const t = Math.min(Math.abs(ratio), 1);
+        const r = Math.round(230 - t * 185);
+        const g = Math.round(230 - t * 84);
+        const b = Math.round(230 - t * 151);
+        return `rgb(${r},${g},${b})`;
+    } else if (ratio < -0.02) {
+        const t = Math.min(Math.abs(ratio), 1);
+        const r = Math.round(230 - t * 91);
+        const g = Math.round(230 - t * 204);
+        const b = Math.round(230 - t * 187);
+        return `rgb(${r},${g},${b})`;
+    }
+    return '#e8e3db';
+}
 
+function initLeafletMap() {
+    if (leafletMap) return;
     const container = document.getElementById('mapa-espana');
     if (!container) return;
 
-    // Calcular diferencias y escala de color
-    let maxDiff = 0;
+    leafletMap = L.map('mapa-espana', {
+        zoomControl: true,
+        attributionControl: false,
+        minZoom: 5,
+        maxZoom: 8
+    }).setView([39.5, -3.5], 6);
+
+    // Fondo claro sin tiles
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd',
+        maxZoom: 8
+    }).addTo(leafletMap);
+
+    // Cargar GeoJSON
+    fetch('/static/data/spain-ccaa.geojson')
+        .then(r => r.json())
+        .then(data => {
+            geojsonData = data;
+            geojsonLayer = L.geoJSON(data, {
+                style: () => ({
+                    fillColor: '#e8e3db',
+                    weight: 1.5,
+                    opacity: 1,
+                    color: '#ffffff',
+                    fillOpacity: 0.85,
+                    className: 'ccaa-path'
+                }),
+                onEachFeature: (feature, layer) => {
+                    const name = feature.properties.name;
+                    const id = CCAA_NAME_TO_ID[name];
+                    layer._ccaaId = id;
+                    layer._ccaaName = name;
+
+                    layer.on({
+                        mouseover: (e) => {
+                            e.target.setStyle({ weight: 3, color: '#1b2a4a', fillOpacity: 0.95 });
+                            e.target.bringToFront();
+                        },
+                        mouseout: (e) => {
+                            e.target.setStyle({ weight: 1.5, color: '#ffffff', fillOpacity: 0.85 });
+                        },
+                        click: () => {
+                            if (id) mostrarDetalleCCAA(id);
+                        }
+                    });
+
+                    // Tooltip con nombre
+                    layer.bindTooltip(name, {
+                        permanent: false,
+                        direction: 'center',
+                        className: 'ccaa-tooltip'
+                    });
+                }
+            }).addTo(leafletMap);
+
+            // Si ya hay datos de simulación, colorear
+            if (ultimoCcaaData) colorearMapa();
+        });
+}
+
+function colorearMapa() {
+    if (!geojsonLayer || !ultimoCcaaData) return;
+
     const diffMap = {};
-    ccaaData.forEach(c => {
+    let maxDiff = 0;
+    ultimoCcaaData.forEach(c => {
         const diff = c.recaudacion_nueva - c.recaudacion_actual;
-        diffMap[c.id] = {
-            diff,
-            cuotaDiff: c.cuota_media_nueva - c.cuota_media_actual,
-            nombre: c.nombre,
-            declarantes: c.declarantes
-        };
+        diffMap[c.id] = { diff, declarantes: c.declarantes, nombre: c.nombre,
+            cuotaDiff: c.cuota_media_nueva - c.cuota_media_actual };
         if (c.declarantes > 0) maxDiff = Math.max(maxDiff, Math.abs(diff));
     });
     if (maxDiff === 0) maxDiff = 1;
 
-    let svg = `<svg viewBox="0 20 570 500" width="100%" xmlns="http://www.w3.org/2000/svg"
-                style="font-family:'Source Sans 3','Segoe UI',sans-serif;">`;
-
-    // Fondo mar
-    svg += `<rect x="0" y="20" width="570" height="500" fill="#f0f4f8" rx="8"/>`;
-
-    // Dibujar cada CCAA como polígono
-    for (const [id, geo] of Object.entries(SPAIN_CCAA_PATHS)) {
+    geojsonLayer.eachLayer(layer => {
+        const id = layer._ccaaId;
         const info = diffMap[id];
-        let fill = '#d5cfc5'; // régimen foral por defecto
-        let strokeColor = '#fff';
-        let textColor = '#666';
+        let fillColor = '#d5cfc5'; // foral
 
         if (info && info.declarantes > 0) {
             const ratio = info.diff / maxDiff;
-            if (ratio > 0.02) {
-                const t = Math.min(Math.abs(ratio), 1);
-                const r = Math.round(230 - t * 185);
-                const g = Math.round(230 - t * 84);
-                const b = Math.round(230 - t * 151);
-                fill = `rgb(${r},${g},${b})`;
-                textColor = t > 0.4 ? '#fff' : '#1b2a4a';
-            } else if (ratio < -0.02) {
-                const t = Math.min(Math.abs(ratio), 1);
-                const r = Math.round(230 - t * 91);
-                const g = Math.round(230 - t * 204);
-                const b = Math.round(230 - t * 187);
-                fill = `rgb(${r},${g},${b})`;
-                textColor = t > 0.4 ? '#fff' : '#1b2a4a';
-            } else {
-                fill = '#e8e3db';
-                textColor = '#555';
-            }
-            strokeColor = '#ffffffaa';
+            fillColor = getColorForDiff(ratio);
         }
 
-        const tooltip = info
-            ? `${info.nombre}: ${info.diff >= 0 ? '+' : ''}${fmtEur(info.diff)}\nCuota media: ${info.cuotaDiff >= 0 ? '+' : ''}${fmtEur(info.cuotaDiff)}`
-            : geo.label;
+        layer.setStyle({ fillColor: fillColor });
 
-        const clickable = info && info.declarantes > 0;
-        svg += `<path d="${geo.path}" fill="${fill}" stroke="${strokeColor}" stroke-width="1.2"
-                  stroke-linejoin="round" data-ccaa="${id}"
-                  style="cursor:${clickable ? 'pointer' : 'default'};transition:opacity 0.15s;"
-                  onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1"
-                  ${clickable ? `onclick="mostrarDetalleCCAA('${id}')"` : ''}>
-                  <title>${tooltip}</title></path>`;
+        // Actualizar tooltip
+        if (info && info.declarantes > 0) {
+            const s = info.diff >= 0 ? '+' : '';
+            layer.setTooltipContent(
+                `<strong>${info.nombre}</strong><br>${s}${fmtEur(info.diff)}`
+            );
+        }
+    });
+}
 
-        // Etiqueta centrada
-        const fontSize = ['CEU','MEL','RIO','CNT'].includes(id) ? 7
-                        : ['MAD','MUR','PVA','BAL'].includes(id) ? 8
-                        : ['AST','NAV','CAN'].includes(id) ? 8.5 : 9.5;
-        svg += `<text x="${geo.cx}" y="${geo.cy}" text-anchor="middle" dominant-baseline="central"
-                  fill="${textColor}" font-size="${fontSize}" font-weight="600"
-                  style="pointer-events:none;text-shadow:0 0 3px rgba(255,255,255,0.5);">${geo.label}</text>`;
+function actualizarMapa(data) {
+    const ccaaData = data.detalle_ccaa;
+    if (!ccaaData) return;
+    ultimoCcaaData = ccaaData;
+
+    // Inicializar mapa Leaflet si no existe
+    if (!leafletMap) {
+        initLeafletMap();
+    } else {
+        colorearMapa();
     }
-
-    // Línea separadora para Canarias
-    svg += `<line x1="5" y1="460" x2="210" y2="460" stroke="#d5cfc5" stroke-width="0.8" stroke-dasharray="4,3"/>`;
-    svg += `<text x="108" y="470" text-anchor="middle" fill="#999" font-size="7" font-style="italic">Islas Canarias</text>`;
-
-    svg += '</svg>';
-    container.innerHTML = svg;
 
     // Actualizar detalle si estaba abierto
     const detalleDiv = document.getElementById('ccaa-detalle');
