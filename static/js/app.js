@@ -28,28 +28,7 @@ const COLORS = {
     ],
 };
 
-// Mapa SVG simplificado de España por CCAA (viewBox coordinates)
-const CCAA_MAP = {
-    AND: { x: 120, y: 320, w: 180, h: 80, label: "Andalucía" },
-    ARA: { x: 280, y: 120, w: 80, h: 100, label: "Aragón" },
-    AST: { x: 130, y: 30, w: 80, h: 40, label: "Asturias" },
-    BAL: { x: 420, y: 250, w: 50, h: 40, label: "Baleares" },
-    CAN: { x: 0, y: 430, w: 100, h: 40, label: "Canarias" },
-    CNT: { x: 210, y: 25, w: 50, h: 35, label: "Cantabria" },
-    CYL: { x: 100, y: 90, w: 170, h: 90, label: "Castilla y León" },
-    CLM: { x: 170, y: 220, w: 150, h: 80, label: "C.-La Mancha" },
-    CAT: { x: 360, y: 100, w: 90, h: 90, label: "Cataluña" },
-    VAL: { x: 310, y: 220, w: 60, h: 110, label: "C. Valenciana" },
-    EXT: { x: 50, y: 230, w: 100, h: 80, label: "Extremadura" },
-    GAL: { x: 30, y: 30, w: 90, h: 80, label: "Galicia" },
-    MAD: { x: 210, y: 180, w: 50, h: 40, label: "Madrid" },
-    MUR: { x: 290, y: 310, w: 60, h: 40, label: "Murcia" },
-    NAV: { x: 270, y: 40, w: 55, h: 45, label: "Navarra" },
-    PVA: { x: 240, y: 20, w: 60, h: 40, label: "País Vasco" },
-    RIO: { x: 255, y: 75, w: 35, h: 30, label: "La Rioja" },
-    CEU: { x: 175, y: 410, w: 30, h: 20, label: "Ceuta" },
-    MEL: { x: 215, y: 410, w: 30, h: 20, label: "Melilla" },
-};
+// El mapa de CCAA con polígonos reales se carga desde spain_ccaa.js (SPAIN_CCAA_PATHS)
 
 function fmtEur(val) {
     if (Math.abs(val) >= 1e9) return (val / 1e9).toFixed(2) + ' Md€';
@@ -352,73 +331,94 @@ function actualizarTablas(data) {
     }).join('');
 }
 
-// ===================== MAPA CCAA =====================
+// ===================== MAPA CCAA (polígonos reales) =====================
 function actualizarMapa(data) {
     const ccaaData = data.detalle_ccaa;
-    if (!ccaaData) return;
+    if (!ccaaData || typeof SPAIN_CCAA_PATHS === 'undefined') return;
 
     const container = document.getElementById('mapa-espana');
     if (!container) return;
 
-    // Build SVG map
-    let svg = '<svg viewBox="-10 -10 490 490" width="100%" xmlns="http://www.w3.org/2000/svg" style="font-family:Source Sans 3,sans-serif;">';
-
-    // Find max absolute diff for color scaling
+    // Calcular diferencias y escala de color
     let maxDiff = 0;
     const diffMap = {};
     ccaaData.forEach(c => {
         const diff = c.recaudacion_nueva - c.recaudacion_actual;
-        diffMap[c.id] = { diff, cuotaDiff: c.cuota_media_nueva - c.cuota_media_actual, nombre: c.nombre, declarantes: c.declarantes };
+        diffMap[c.id] = {
+            diff,
+            cuotaDiff: c.cuota_media_nueva - c.cuota_media_actual,
+            nombre: c.nombre,
+            declarantes: c.declarantes
+        };
         if (c.declarantes > 0) maxDiff = Math.max(maxDiff, Math.abs(diff));
     });
     if (maxDiff === 0) maxDiff = 1;
 
-    for (const [id, geo] of Object.entries(CCAA_MAP)) {
+    let svg = `<svg viewBox="0 20 570 500" width="100%" xmlns="http://www.w3.org/2000/svg"
+                style="font-family:'Source Sans 3','Segoe UI',sans-serif;">`;
+
+    // Fondo mar
+    svg += `<rect x="0" y="20" width="570" height="500" fill="#f0f4f8" rx="8"/>`;
+
+    // Dibujar cada CCAA como polígono
+    for (const [id, geo] of Object.entries(SPAIN_CCAA_PATHS)) {
         const info = diffMap[id];
-        let fill = '#d5cfc5'; // foral default
+        let fill = '#d5cfc5'; // régimen foral por defecto
+        let strokeColor = '#fff';
         let textColor = '#666';
 
         if (info && info.declarantes > 0) {
-            const ratio = info.diff / maxDiff; // -1 to +1
+            const ratio = info.diff / maxDiff;
             if (ratio > 0.02) {
-                const intensity = Math.min(ratio, 1);
-                const r = Math.round(45 - intensity * 20);
-                const g = Math.round(106 + intensity * 40);
-                const b = Math.round(79 - intensity * 30);
+                // Verde: más recaudación
+                const t = Math.min(Math.abs(ratio), 1);
+                const r = Math.round(230 - t * 185);  // 230 -> 45
+                const g = Math.round(230 - t * 84);   // 230 -> 146
+                const b = Math.round(230 - t * 151);   // 230 -> 79
                 fill = `rgb(${r},${g},${b})`;
-                textColor = '#fff';
+                textColor = t > 0.4 ? '#fff' : '#1b2a4a';
             } else if (ratio < -0.02) {
-                const intensity = Math.min(Math.abs(ratio), 1);
-                const r = Math.round(139 + intensity * 50);
-                const g2 = Math.round(26 + intensity * 20);
-                const b = Math.round(43 + intensity * 20);
-                fill = `rgb(${r},${g2},${b})`;
-                textColor = '#fff';
+                // Rojo/burdeos: menos recaudación
+                const t = Math.min(Math.abs(ratio), 1);
+                const r = Math.round(230 - t * 91);   // 230 -> 139
+                const g = Math.round(230 - t * 204);  // 230 -> 26
+                const b = Math.round(230 - t * 187);  // 230 -> 43
+                fill = `rgb(${r},${g},${b})`;
+                textColor = t > 0.4 ? '#fff' : '#1b2a4a';
             } else {
                 fill = '#e8e3db';
                 textColor = '#555';
             }
+            strokeColor = '#ffffffaa';
         }
 
-        const tooltip = info ? `${info.nombre}: ${info.diff >= 0 ? '+' : ''}${fmtEur(info.diff)}` : id;
+        const tooltip = info
+            ? `${info.nombre}: ${info.diff >= 0 ? '+' : ''}${fmtEur(info.diff)}\nCuota media: ${info.cuotaDiff >= 0 ? '+' : ''}${fmtEur(info.cuotaDiff)}`
+            : geo.label;
 
-        svg += `<rect x="${geo.x}" y="${geo.y}" width="${geo.w}" height="${geo.h}"
-                  fill="${fill}" stroke="#fff" stroke-width="1.5" rx="3"
-                  style="cursor:pointer" data-id="${id}">
-                  <title>${tooltip}</title></rect>`;
+        // Path del polígono
+        svg += `<path d="${geo.path}" fill="${fill}" stroke="${strokeColor}" stroke-width="1.2"
+                  stroke-linejoin="round" style="cursor:pointer;transition:opacity 0.15s;"
+                  onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
+                  <title>${tooltip}</title></path>`;
 
-        // Label
-        const fontSize = geo.w < 50 ? 7 : geo.w < 80 ? 8 : 9;
-        svg += `<text x="${geo.x + geo.w/2}" y="${geo.y + geo.h/2}"
-                  text-anchor="middle" dominant-baseline="central"
+        // Etiqueta centrada
+        const fontSize = ['CEU','MEL','RIO','CNT'].includes(id) ? 7
+                        : ['MAD','MUR','PVA','BAL'].includes(id) ? 8
+                        : ['AST','NAV','CAN'].includes(id) ? 8.5 : 9.5;
+        svg += `<text x="${geo.cx}" y="${geo.cy}" text-anchor="middle" dominant-baseline="central"
                   fill="${textColor}" font-size="${fontSize}" font-weight="600"
-                  style="pointer-events:none;">${geo.label}</text>`;
+                  style="pointer-events:none;text-shadow:0 0 3px rgba(255,255,255,0.5);">${geo.label}</text>`;
     }
+
+    // Línea separadora para Canarias
+    svg += `<line x1="5" y1="460" x2="210" y2="460" stroke="#d5cfc5" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+    svg += `<text x="108" y="470" text-anchor="middle" fill="#999" font-size="7" font-style="italic">Islas Canarias</text>`;
 
     svg += '</svg>';
     container.innerHTML = svg;
 
-    // Update CCAA table
+    // Tabla de CCAA
     const tbody = document.querySelector('#tabla-ccaa tbody');
     if (tbody) {
         tbody.innerHTML = ccaaData
