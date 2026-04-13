@@ -7,10 +7,8 @@ Fuentes de datos: AEAT, INE (DIRCE), Ministerio de Hacienda, Banco de España.
 
 import os
 import secrets
-from functools import wraps
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, jsonify
 
 from data.irpf_data import (
     TRAMOS_ACTUALES,
@@ -27,43 +25,8 @@ from data.irpf_data import (
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-# Usuarios autorizados (hash de contraseña)
-USUARIOS = {
-    "jaime": generate_password_hash("Jaime26$"),
-    "manolo": generate_password_hash("Manolo26$"),
-}
-
-
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user" not in session:
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return decorated
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = None
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        if username in USUARIOS and check_password_hash(USUARIOS[username], password):
-            session["user"] = username
-            return redirect(url_for("dashboard"))
-        error = "Usuario o contraseña incorrectos"
-    return render_template("login.html", error=error)
-
-
-@app.route("/logout")
-def logout():
-    session.pop("user", None)
-    return redirect(url_for("login"))
-
 
 @app.route("/")
-@login_required
 def dashboard():
     return render_template(
         "dashboard.html",
@@ -72,12 +35,11 @@ def dashboard():
         empresas=PERFILES_EMPRESAS,
         distribucion=DISTRIBUCION_DECLARANTES,
         is_tipo=IS_TIPO_GENERAL,
-        user=session["user"],
+        user="invitado",
     )
 
 
 @app.route("/api/simular", methods=["POST"])
-@login_required
 def api_simular():
     """
     Recibe tramos personalizados y tipo IS, devuelve comparativa completa.
@@ -105,7 +67,6 @@ def api_simular():
 
 
 @app.route("/api/calcular_individual", methods=["POST"])
-@login_required
 def api_calcular_individual():
     """
     Calcula IRPF para una renta individual con tramos personalizados.
@@ -132,7 +93,6 @@ def api_calcular_individual():
 
 
 @app.route("/api/simular_batch", methods=["POST"])
-@login_required
 def api_simular_batch():
     """
     Simula múltiples escenarios en una sola petición.
@@ -192,7 +152,6 @@ def api_simular_batch():
 
 
 @app.route("/api/datos_base")
-@login_required
 def api_datos_base():
     """Devuelve los datos base para inicializar la interfaz."""
     tramos_serializables = []
